@@ -6,14 +6,17 @@ type SubmitButtonProps = {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
+  isPending?: boolean;
 };
 
 export function SubmitButton({
   children,
   pendingLabel = "กำลังบันทึก...",
   className = "",
+  isPending,
 }: SubmitButtonProps) {
-  const { pending } = useFormStatus();
+  const { pending: formPending } = useFormStatus();
+  const pending = isPending ?? formPending;
 
   return (
     <button

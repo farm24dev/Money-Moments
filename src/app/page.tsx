@@ -1,12 +1,11 @@
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AddPersonForm } from "@/app/components/AddPersonForm";
 import { AddSavingEntryForm } from "@/app/components/AddSavingEntryForm";
+import { DeletePersonButton } from "@/app/components/DeletePersonButton";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { FormState } from "@/types/form-state";
 
 export const dynamic = "force-dynamic";
 
@@ -26,44 +25,36 @@ type DashboardData = {
     id: number;
     name: string;
     totalAmount: number;
+    entryCount: number;
   }>;
   entries: Array<{
     id: number;
+    personId: number;
     personName: string;
+    categoryName: string | null;
     label: string;
     amount: number;
     createdAt: string;
   }>;
+  categories: Array<{
+    id: number;
+    name: string;
+    description: string | null;
+  }>;
   totalSaved: number;
 };
 
-type PersonWithSavingEntries = {
-  id: number;
-  name: string;
-  savingEntries: Array<{ amount: unknown }>;
-};
-
-type EntryWithPersonName = {
-  id: number;
-  label: string;
-  amount: unknown;
-  createdAt: Date;
-  person: { name: string };
-};
-
 async function getDashboardData(userId: string): Promise<DashboardData> {
-  const [people, entries]: [
-    PersonWithSavingEntries[],
-    EntryWithPersonName[],
-  ] = await Promise.all([
+  const [people, entries, categories] = await Promise.all([
     prisma.person.findMany({
       where: { userId },
       orderBy: { name: "asc" },
       include: {
         savingEntries: {
-          select: {
-            amount: true,
-          },
+          select: { amount: true },
+        },
+        _count: {
+          select: { savingEntries: true },
         },
       },
     }),
@@ -75,6 +66,9 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
       },
       include: {
         person: {
+          select: { id: true, name: true },
+        },
+        category: {
           select: { name: true },
         },
       },
@@ -82,6 +76,15 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
         createdAt: "desc",
       },
       take: 25,
+    }),
+    await prisma.savingCategory.findMany({
+      where: { userId },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+      },
     }),
   ]);
 
@@ -95,6 +98,7 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
       id: person.id,
       name: person.name,
       totalAmount: total,
+      entryCount: person._count.savingEntries,
     };
   });
 
@@ -105,7 +109,9 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
 
   const recentEntries = entries.map((entry) => ({
     id: entry.id,
+    personId: entry.person.id,
     personName: entry.person.name,
+    categoryName: entry.category?.name ?? null,
     label: entry.label,
     amount: Number(entry.amount),
     createdAt: entry.createdAt.toISOString(),
@@ -114,159 +120,8 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
   return {
     people: peopleWithTotals,
     entries: recentEntries,
+    categories,
     totalSaved,
-  };
-}
-
-async function addPersonAction(
-  _: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  "use server";
-
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return {
-      status: "error",
-      message: "จำเป็นต้องเข้าสู่ระบบก่อน",
-    };
-  }
-
-  const name = formData.get("name")?.toString().trim() ?? "";
-
-  if (!name) {
-    return {
-      status: "error",
-      message: "กรุณาระบุชื่อสมาชิก",
-    };
-  }
-
-  if (name.length > 64) {
-    return {
-      status: "error",
-      message: "ชื่อต้องไม่เกิน 64 ตัวอักษร",
-    };
-  }
-
-  try {
-    await prisma.person.create({
-      data: {
-        name,
-        userId: session.user.id,
-      },
-    });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
-      return {
-        status: "error",
-        message: "ชื่อสมาชิกนี้ถูกใช้งานแล้ว",
-      };
-    }
-
-    console.error("Failed to add person", error);
-
-    return {
-      status: "error",
-      message: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
-    };
-  }
-
-  revalidatePath("/");
-
-  return {
-    status: "success",
-    message: `เพิ่ม ${name} เรียบร้อย`,
-  };
-}
-
-async function addSavingEntryAction(
-  _: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  "use server";
-
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return {
-      status: "error",
-      message: "จำเป็นต้องเข้าสู่ระบบก่อน",
-    };
-  }
-
-  const personIdRaw = formData.get("personId")?.toString() ?? "";
-  const label = formData.get("label")?.toString().trim() ?? "";
-  const amountRaw = formData.get("amount")?.toString() ?? "";
-
-  const personId = Number(personIdRaw);
-  const amount = Number(amountRaw);
-
-  if (!Number.isInteger(personId)) {
-    return {
-      status: "error",
-      message: "กรุณาเลือกสมาชิก",
-    };
-  }
-
-  if (!label) {
-    return {
-      status: "error",
-      message: "กรุณาระบุรายการที่ต้องการเก็บ",
-    };
-  }
-
-  if (label.length > 128) {
-    return {
-      status: "error",
-      message: "รายการต้องไม่เกิน 128 ตัวอักษร",
-    };
-  }
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return {
-      status: "error",
-      message: "จำนวนเงินต้องมากกว่า 0",
-    };
-  }
-
-  const person = await prisma.person.findFirst({
-    where: {
-      id: personId,
-      userId: session.user.id,
-    },
-    select: { id: true },
-  });
-
-  if (!person) {
-    return {
-      status: "error",
-      message: "ไม่พบสมาชิกที่เลือก",
-    };
-  }
-
-  try {
-    await prisma.savingEntry.create({
-      data: {
-        personId: person.id,
-        label,
-        amount,
-      },
-    });
-  } catch (error) {
-    console.error("Failed to add saving entry", error);
-
-    return {
-      status: "error",
-      message: "ไม่สามารถบันทึกยอดออมได้ กรุณาลองใหม่",
-    };
-  }
-
-  revalidatePath("/");
-
-  return {
-    status: "success",
-    message: "บันทึกยอดออมเรียบร้อย",
   };
 }
 
@@ -303,6 +158,20 @@ export default async function Home() {
             <p className="max-w-2xl text-sm text-zinc-600 sm:text-base">
               บันทึกยอดออมเงินของแต่ละคน ตรวจสอบยอดรวม และดูประวัติการฝากล่าสุดได้จากหน้าเดียว
             </p>
+            <nav className="flex flex-wrap gap-2 pt-2 text-xs sm:text-sm">
+              <Link
+                href="/history"
+                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
+              >
+                ดูประวัติทั้งหมด
+              </Link>
+              <Link
+                href="/categories"
+                className="rounded-full border border-purple-200 bg-purple-50 px-3 py-1 font-medium text-purple-700 transition hover:bg-purple-100"
+              >
+                จัดการหมวดหมู่
+              </Link>
+            </nav>
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <div className="text-sm text-zinc-600">
@@ -353,14 +222,71 @@ export default async function Home() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
-          <AddPersonForm action={addPersonAction} />
+          <AddPersonForm />
           <AddSavingEntryForm
-            action={addSavingEntryAction}
             people={data.people.map((person) => ({
               id: person.id,
               name: person.name,
             }))}
+            categories={data.categories.map((category) => ({
+              id: category.id,
+              name: category.name,
+              description: category.description,
+            }))}
           />
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">สมาชิกทั้งหมด</h2>
+            <p className="text-sm text-zinc-600">
+              กดชื่อเพื่อดูประวัติ หรือจัดการสมาชิกได้จากปุ่มลบ
+            </p>
+          </div>
+          {data.people.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {data.people.map((person) => (
+                <div
+                  key={person.id}
+                  className="flex h-full flex-col justify-between rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-zinc-900">
+                      <Link
+                        href={`/history/${person.id}`}
+                        className="text-blue-600 underline-offset-2 hover:underline"
+                      >
+                        {person.name}
+                      </Link>
+                    </h3>
+                    <p className="text-sm text-zinc-600">
+                      บันทึก {person.entryCount.toLocaleString("th-TH")} ครั้ง
+                    </p>
+                    <p className="text-sm font-medium text-zinc-900">
+                      {currencyFormatter.format(person.totalAmount)}
+                    </p>
+                  </div>
+                  <div className="mt-4 flex flex-col gap-2">
+                    <Link
+                      href={`/history/${person.id}`}
+                      className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+                    >
+                      ดูประวัติ
+                    </Link>
+                    <DeletePersonButton
+                      personId={person.id}
+                      personName={person.name}
+                      redirectTo=""
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
+              ยังไม่มีสมาชิก เริ่มเพิ่มสมาชิกได้ด้านบน
+            </p>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -379,6 +305,9 @@ export default async function Home() {
                       สมาชิก
                     </th>
                     <th scope="col" className="px-4 py-3">
+                      หมวดหมู่
+                    </th>
+                    <th scope="col" className="px-4 py-3">
                       รายการ
                     </th>
                     <th scope="col" className="px-4 py-3 text-right">
@@ -393,7 +322,15 @@ export default async function Home() {
                   {data.entries.map((entry) => (
                     <tr key={entry.id} className="hover:bg-blue-50/40">
                       <td className="px-4 py-3 font-medium text-zinc-800">
-                        {entry.personName}
+                        <Link
+                          href={`/history/${entry.personId}`}
+                          className="text-blue-600 underline-offset-2 hover:underline"
+                        >
+                          {entry.personName}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-zinc-600">
+                        {entry.categoryName ?? "-"}
                       </td>
                       <td className="px-4 py-3 text-zinc-600">{entry.label}</td>
                       <td className="px-4 py-3 text-right font-semibold text-zinc-900">

@@ -13,12 +13,12 @@ type ApiResponse<T = unknown> = {
   data?: T;
 };
 
-type CreatedPerson = {
+type CreatedCategory = {
   id: number;
   name: string;
 };
 
-export function AddPersonForm() {
+export function AddCategoryForm() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<FormState>(initialFormState);
@@ -32,23 +32,24 @@ export function AddPersonForm() {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
     const name = formData.get("name")?.toString().trim() ?? "";
+    const description = formData.get("description")?.toString().trim() ?? "";
 
     if (!name) {
-      setState({
-        status: "error",
-        message: "กรุณาระบุชื่อสมาชิก",
-      });
+      setState({ status: "error", message: "กรุณาระบุชื่อหมวดหมู่" });
       return;
     }
 
     if (name.length > 64) {
-      setState({
-        status: "error",
-        message: "ชื่อต้องไม่เกิน 64 ตัวอักษร",
-      });
+      setState({ status: "error", message: "ชื่อหมวดหมู่ต้องไม่เกิน 64 ตัวอักษร" });
+      return;
+    }
+
+    if (description.length > 256) {
+      setState({ status: "error", message: "คำอธิบายต้องไม่เกิน 256 ตัวอักษร" });
       return;
     }
 
@@ -56,22 +57,25 @@ export function AddPersonForm() {
       setState(initialFormState);
 
       try {
-        const response = await fetch("/api/people", {
+        const response = await fetch("/api/categories", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({
+            name,
+            description: description.length > 0 ? description : undefined,
+          }),
         });
 
         const payload = (await response
           .json()
-          .catch(() => null)) as ApiResponse<CreatedPerson> | null;
+          .catch(() => null)) as ApiResponse<CreatedCategory> | null;
 
         if (!response.ok || !payload?.success) {
           setState({
             status: "error",
-            message: payload?.message ?? "ไม่สามารถเพิ่มสมาชิกได้ กรุณาลองอีกครั้ง",
+            message: payload?.message ?? "ไม่สามารถบันทึกหมวดหมู่ได้ กรุณาลองใหม่",
           });
           return;
         }
@@ -79,15 +83,14 @@ export function AddPersonForm() {
         setState({
           status: "success",
           message:
-            payload.message ?? `เพิ่ม ${payload.data?.name ?? "สมาชิก"} เรียบร้อย`,
+            payload.message ?? `เพิ่มหมวดหมู่ ${payload.data?.name ?? "ใหม่"} เรียบร้อย`,
         });
-
         router.refresh();
       } catch (error) {
-        console.error("Failed to submit add person form", error);
+        console.error("Failed to create category", error);
         setState({
           status: "error",
-          message: "ไม่สามารถเพิ่มสมาชิกได้ กรุณาลองอีกครั้ง",
+          message: "ไม่สามารถบันทึกหมวดหมู่ได้ กรุณาลองใหม่",
         });
       }
     };
@@ -104,22 +107,35 @@ export function AddPersonForm() {
       className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
     >
       <div>
-        <h2 className="text-base font-semibold text-zinc-900">เพิ่มสมาชิก</h2>
+        <h2 className="text-base font-semibold text-zinc-900">เพิ่มหมวดหมู่การออม</h2>
         <p className="text-sm text-zinc-500">
-          ระบุชื่อของคนที่ต้องการบันทึกเงินออม
+          กำหนดหมวดหมู่เพื่อเลือกใช้ตอนบันทึกยอดออม
         </p>
       </div>
       <div className="space-y-1.5">
-        <label htmlFor="person-name" className="text-sm font-medium text-zinc-700">
-          ชื่อสมาชิก
+        <label htmlFor="category-name" className="text-sm font-medium text-zinc-700">
+          ชื่อหมวดหมู่
         </label>
         <input
-          id="person-name"
+          id="category-name"
           name="name"
           type="text"
           required
           maxLength={64}
-          placeholder="เช่น แพรวา"
+          placeholder="เช่น กองทุนการศึกษา"
+          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor="category-description" className="text-sm font-medium text-zinc-700">
+          คำอธิบาย (ไม่บังคับ)
+        </label>
+        <textarea
+          id="category-description"
+          name="description"
+          maxLength={256}
+          rows={3}
+          placeholder="รายละเอียดเพิ่มเติมหรือเป้าหมายของหมวดหมู่นี้"
           className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
         />
       </div>
@@ -130,7 +146,7 @@ export function AddPersonForm() {
         <p className="text-sm text-emerald-600">{state.message}</p>
       ) : null}
       <SubmitButton pendingLabel="กำลังเพิ่ม..." isPending={isPending}>
-        บันทึก
+        บันทึกหมวดหมู่
       </SubmitButton>
     </form>
   );

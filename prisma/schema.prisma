@@ -8,41 +8,45 @@ datasource db {
 }
 
 model User {
-  id                   String                @id @default(cuid())
-  name                 String?
-  email                String                @unique
-  passwordHash         String
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  people               Person[]
-  sessions             Session[]
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  people       Person[]
+  sessions     Session[]
 }
 
 model Person {
-  id            Int             @id @default(autoincrement())
-  name          String
+  id            Int           @id @default(autoincrement())
+  name          String        @db.VarChar(64)
   userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   savingEntries SavingEntry[]
-  createdAt     DateTime        @default(now())
 
   @@unique([userId, name])
+  @@index([userId])
 }
 
 model SavingEntry {
   id        Int      @id @default(autoincrement())
   personId  Int
-  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-  label     String
+  label     String   @db.VarChar(128)
   amount    Decimal  @db.Decimal(12, 2)
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([personId])
 }
 
 model Session {
   id        String   @id @default(cuid())
   tokenHash String   @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  expires   DateTime
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  expires   DateTime @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -37,8 +37,25 @@ type DashboardData = {
   totalSaved: number;
 };
 
+type PersonWithSavingEntries = {
+  id: number;
+  name: string;
+  savingEntries: Array<{ amount: unknown }>;
+};
+
+type EntryWithPersonName = {
+  id: number;
+  label: string;
+  amount: unknown;
+  createdAt: Date;
+  person: { name: string };
+};
+
 async function getDashboardData(userId: string): Promise<DashboardData> {
-  const [people, entries] = await Promise.all([
+  const [people, entries]: [
+    PersonWithSavingEntries[],
+    EntryWithPersonName[],
+  ] = await Promise.all([
     prisma.person.findMany({
       where: { userId },
       orderBy: { name: "asc" },
@@ -140,10 +157,7 @@ async function addPersonAction(
       },
     });
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
+    if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
       return {
         status: "error",
         message: "ชื่อสมาชิกนี้ถูกใช้งานแล้ว",

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 
 import { SubmitButton } from "@/app/components/SubmitButton";
 import { FormState, initialFormState } from "@/types/form-state";
@@ -11,7 +11,7 @@ type LoginFormProps = {
 };
 
 export function LoginForm({ action }: LoginFormProps) {
-  const [state, formAction] = useFormState(action, initialFormState);
+  const [state, formAction] = useActionState(action, initialFormState);
 
   return (
     <form

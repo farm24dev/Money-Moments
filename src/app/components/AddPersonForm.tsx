@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useFormState } from "react-dom";
+import { useActionState, useEffect, useRef } from "react";
 
 import { initialFormState, FormState } from "@/types/form-state";
 
@@ -12,7 +11,7 @@ type AddPersonFormProps = {
 };
 
 export function AddPersonForm({ action }: AddPersonFormProps) {
-  const [state, formAction] = useFormState(action, initialFormState);
+  const [state, formAction] = useActionState(action, initialFormState);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

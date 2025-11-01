@@ -3,9 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { SubmitButton } from "@/app/components/SubmitButton";
 import { initialFormState, FormState } from "@/types/form-state";
-
-import { SubmitButton } from "./SubmitButton";
 
 type PersonOption = {
   id: number;
@@ -76,9 +79,16 @@ export function AddSavingEntryForm({ people, categories }: AddSavingEntryFormPro
     const label = formData.get("label")?.toString().trim() ?? "";
     const amountValue = formData.get("amount")?.toString() ?? "";
     const categoryIdValue = formData.get("categoryId")?.toString() ?? "";
+    const type = formData.get("type")?.toString() ?? "deposit";
+    const transactionDate = formData.get("transactionDate")?.toString() ?? "";
 
     if (!personIdValue) {
       setState({ status: "error", message: "กรุณาเลือกสมาชิก" });
+      return;
+    }
+
+    if (!transactionDate) {
+      setState({ status: "error", message: "กรุณาเลือกวันที่ทำรายการ" });
       return;
     }
 
@@ -103,6 +113,8 @@ export function AddSavingEntryForm({ people, categories }: AddSavingEntryFormPro
       label,
       amount: amountValue,
       categoryId: categoryIdValue ? Number(categoryIdValue) : null,
+      type,
+      transactionDate,
     };
 
     const run = async () => {
@@ -149,113 +161,144 @@ export function AddSavingEntryForm({ people, categories }: AddSavingEntryFormPro
   };
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
-    >
-      <div>
-        <h2 className="text-base font-semibold text-zinc-900">บันทึกยอดออม</h2>
-        <p className="text-sm text-zinc-500">
-          ระบุผู้ฝาก เลือกหมวดหมู่ (ถ้าต้องการ) และจำนวนเงินที่ฝากครั้งนี้
-        </p>
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="saving-person" className="text-sm font-medium text-zinc-700">
-          เลือกสมาชิก
-        </label>
-        <select
-          id="saving-person"
-          name="personId"
-          required
-          disabled={!hasPeople}
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-zinc-100"
-          defaultValue=""
-        >
-          <option value="" disabled>
-            {hasPeople ? "เลือกสมาชิก" : "ยังไม่มีสมาชิก"}
-          </option>
-          {people.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="saving-category" className="text-sm font-medium text-zinc-700">
-          หมวดหมู่ (ไม่บังคับ)
-        </label>
-        <select
-          id="saving-category"
-          name="categoryId"
-          disabled={!hasPeople || categories.length === 0}
-          onChange={handleCategoryChange}
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-zinc-100"
-          defaultValue=""
-        >
-          <option value="">
-            {categories.length > 0 ? "เลือกหมวดหมู่" : "ยังไม่มีหมวดหมู่"}
-          </option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-              {category.description ? ` - ${category.description}` : ""}
-            </option>
-          ))}
-        </select>
-        {categories.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            สามารถเพิ่มหมวดหมู่ได้ที่หน้าจัดการหมวดหมู่
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="saving-label" className="text-sm font-medium text-zinc-700">
-          รายการที่ต้องการเก็บ
-        </label>
-        <input
-          ref={labelInputRef}
-          id="saving-label"
-          name="label"
-          type="text"
-          placeholder="เช่น ค่าเทอม, กองทุนเที่ยว"
-          required
-          maxLength={128}
-          disabled={!hasPeople}
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-zinc-100"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="saving-amount" className="text-sm font-medium text-zinc-700">
-          จำนวนเงิน (บาท)
-        </label>
-        <input
-          id="saving-amount"
-          name="amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          required
-          disabled={!hasPeople}
-          placeholder="0.00"
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-zinc-100"
-        />
-      </div>
-      {!hasPeople ? (
-        <p className="text-sm text-amber-600">
-          กรุณาเพิ่มสมาชิกก่อนเพื่อบันทึกยอดออม
-        </p>
-      ) : null}
-      {state.status === "error" ? (
-        <p className="text-sm text-red-600">{state.message}</p>
-      ) : null}
-      {state.status === "success" && state.message ? (
-        <p className="text-sm text-emerald-600">{state.message}</p>
-      ) : null}
-      <SubmitButton pendingLabel="กำลังบันทึก..." className="w-full" isPending={isPending}>
-        บันทึกยอดออม
-      </SubmitButton>
-    </form>
+    <Card>
+      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <CardHeader className="pb-2">
+          <CardTitle>บันทึกยอดออม</CardTitle>
+          <CardDescription>
+            ระบุรายละเอียดการฝากหรือเบิก เลือกหมวดหมู่เพื่อช่วยจัดกลุ่มแผนการออมของคุณ
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="saving-type" requiredIndicator>
+                ประเภท
+              </Label>
+              <Select
+                id="saving-type"
+                name="type"
+                required
+                disabled={!hasPeople}
+                defaultValue="deposit"
+              >
+                <option value="deposit">ฝาก</option>
+                <option value="withdraw">เบิก</option>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="saving-date" requiredIndicator>
+                วันที่ทำรายการ
+              </Label>
+              <Input
+                id="saving-date"
+                name="transactionDate"
+                type="date"
+                required
+                disabled={!hasPeople}
+                defaultValue={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="saving-person" requiredIndicator>
+                เลือกสมาชิก
+              </Label>
+              <Select
+                id="saving-person"
+                name="personId"
+                required
+                disabled={!hasPeople}
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  {hasPeople ? "เลือกสมาชิก" : "ยังไม่มีสมาชิก"}
+                </option>
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="saving-category">หมวดหมู่ (ไม่บังคับ)</Label>
+              <Select
+                id="saving-category"
+                name="categoryId"
+                disabled={!hasPeople || categories.length === 0}
+                defaultValue=""
+                onChange={handleCategoryChange}
+              >
+                <option value="">
+                  {categories.length > 0 ? "เลือกหมวดหมู่" : "ยังไม่มีหมวดหมู่"}
+                </option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                    {category.description ? ` - ${category.description}` : ""}
+                  </option>
+                ))}
+              </Select>
+              {categories.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  เพิ่มหมวดหมู่ใหม่ได้ที่เมนูหมวดหมู่ด้านซ้ายมือ
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="saving-label" requiredIndicator>
+              รายการที่ต้องการเก็บ
+            </Label>
+            <Input
+              ref={labelInputRef}
+              id="saving-label"
+              name="label"
+              placeholder="เช่น ค่าเทอม, ทริปเที่ยว"
+              maxLength={128}
+              required
+              disabled={!hasPeople}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="saving-amount" requiredIndicator>
+              จำนวนเงิน (บาท)
+            </Label>
+            <Input
+              id="saving-amount"
+              name="amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              required
+              disabled={!hasPeople}
+            />
+          </div>
+          {!hasPeople ? (
+            <p className="text-sm text-amber-600">
+              กรุณาเพิ่มสมาชิกก่อนเพื่อบันทึกยอดออม
+            </p>
+          ) : null}
+          {state.status === "error" ? (
+            <p className="text-sm text-destructive">{state.message}</p>
+          ) : null}
+          {state.status === "success" && state.message ? (
+            <p className="text-sm text-emerald-600">{state.message}</p>
+          ) : null}
+        </CardContent>
+        <div className="px-6 pb-6">
+          <SubmitButton
+            pendingLabel="กำลังบันทึก..."
+            className="w-full"
+            isPending={isPending}
+          >
+            บันทึกยอดออม
+          </SubmitButton>
+        </div>
+      </form>
+    </Card>
   );
 }

@@ -2,6 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AddCategoryForm } from "@/app/components/AddCategoryForm";
+import { DeleteCategoryButton } from "@/app/components/DeleteCategoryButton";
+import { AppShell } from "@/components/layout/AppShell";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { buttonClassName } from "@/lib/button-classes";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -49,102 +60,148 @@ export default async function CategoriesPage() {
   }
 
   const categories = await getCategories(session.user.id);
+  const totalAmount = categories.reduce((sum, category) => sum + category.totalAmount, 0);
+  const activeCategories = categories.filter((category) => category.entryCount > 0).length;
 
   return (
-    <div className="min-h-screen bg-zinc-100 py-12">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-zinc-900">
+    <AppShell>
+      <div className="space-y-10">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               จัดการหมวดหมู่การออม
             </h1>
-            <p className="text-sm text-zinc-600">
-              เพิ่มหรือจัดระเบียบหมวดหมู่เพื่อให้ง่ายต่อการบันทึกยอดออม
+            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+              เพิ่ม แก้ไข และวิเคราะห์หมวดหมู่เพื่อช่วยให้การออมเป็นระบบมากขึ้น
             </p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge className="bg-secondary text-secondary-foreground">
+                หมวดหมู่ทั้งหมด {categories.length}
+              </Badge>
+              <Badge className="bg-primary/15 text-primary">
+                ใช้งานจริง {activeCategories}
+              </Badge>
+            </div>
           </div>
           <Link
             href="/"
-            className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+            className={buttonClassName({ variant: "outline" })}
           >
             กลับหน้าหลัก
           </Link>
-        </header>
+        </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <AddCategoryForm />
-          <div className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-zinc-900">สรุป</h2>
-              <p className="text-sm text-zinc-500">
-                หมวดหมู่ทั้งหมด {categories.length} รายการ
-              </p>
-            </div>
-            <div className="grid gap-3 text-sm text-zinc-700 sm:grid-cols-2">
-              <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
-                <p className="text-xs uppercase text-blue-600">ยอดออมในทุกหมวดหมู่</p>
-                <p className="mt-1 text-lg font-semibold text-blue-900">
-                  {currencyFormatter.format(
-                    categories.reduce((sum, category) => sum + category.totalAmount, 0),
+          <Card>
+            <CardHeader>
+              <CardTitle>สรุปภาพรวมหมวดหมู่</CardTitle>
+              <CardDescription>
+                สถิติยอดรวมจากทุกหมวดหมู่และหมวดหมู่ที่มีการบันทึกบ่อย
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <Card className="border border-border/60 bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    ยอดออมในทุกหมวดหมู่
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold tracking-tight">
+                    {currencyFormatter.format(totalAmount)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    รวมเฉพาะรายการที่จัดหมวดหมู่แล้ว
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="border border-border/60 bg-muted/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    หมวดหมู่ยอดนิยม
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {categories.length > 0 ? (
+                    categories
+                      .slice()
+                      .sort((a, b) => b.entryCount - a.entryCount)
+                      .slice(0, 3)
+                      .map((category) => (
+                        <div key={category.id} className="flex items-center justify-between">
+                          <span className="font-medium text-foreground">{category.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {category.entryCount.toLocaleString("th-TH")}
+                          </span>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      ยังไม่มีหมวดหมู่ในระบบ
+                    </p>
                   )}
-                </p>
-              </div>
-              <div className="rounded-lg border border-purple-100 bg-purple-50/60 p-3">
-                <p className="text-xs uppercase text-purple-600">หมวดหมู่ที่ใช้งาน</p>
-                <p className="mt-1 text-lg font-semibold text-purple-900">
-                  {
-                    categories.filter((category) => category.entryCount > 0).length
-                  } หมวดหมู่
-                </p>
-              </div>
-            </div>
-          </div>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
         </div>
 
         <section className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-zinc-900">รายการหมวดหมู่</h2>
-            <p className="text-sm text-zinc-600">
-              ดูจำนวนครั้งที่ใช้งานและยอดรวมทั้งหมวดหมู่
+            <h2 className="text-xl font-semibold text-foreground">รายการหมวดหมู่</h2>
+            <p className="text-sm text-muted-foreground">
+              แสดงจำนวนครั้งที่ใช้งานและยอดรวมของแต่ละหมวดหมู่
             </p>
           </div>
           {categories.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-                <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-                  <tr>
-                    <th className="px-4 py-3">ชื่อหมวดหมู่</th>
-                    <th className="px-4 py-3">คำอธิบาย</th>
-                    <th className="px-4 py-3 text-right">จำนวนครั้งที่บันทึก</th>
-                    <th className="px-4 py-3 text-right">ยอดรวม</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {categories.map((category) => (
-                    <tr key={category.id} className="hover:bg-blue-50/40">
-                      <td className="px-4 py-3 font-medium text-zinc-800">
-                        {category.name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-zinc-600">
-                        {category.description ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm text-zinc-600">
-                        {category.entryCount.toLocaleString("th-TH")}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900">
-                        {currencyFormatter.format(category.totalAmount)}
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-border/60 text-left text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">ชื่อหมวดหมู่</th>
+                      <th className="px-4 py-3">คำอธิบาย</th>
+                      <th className="px-4 py-3 text-right">จำนวนครั้งที่บันทึก</th>
+                      <th className="px-4 py-3 text-right">ยอดรวม</th>
+                      <th className="px-4 py-3 text-center">การจัดการ</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {categories.map((category) => (
+                      <tr key={category.id} className="hover:bg-muted/40">
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          {category.name}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {category.description ?? "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-muted-foreground">
+                          {category.entryCount.toLocaleString("th-TH")}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-foreground">
+                          {currencyFormatter.format(category.totalAmount)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <DeleteCategoryButton
+                            categoryId={category.id}
+                            categoryName={category.name}
+                            hasEntries={category.entryCount > 0}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
-              ยังไม่มีหมวดหมู่ เริ่มเพิ่มหมวดหมู่ใหม่ได้ทางแบบฟอร์มด้านบน
+            <p className="rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+              ยังไม่มีหมวดหมู่ เริ่มเพิ่มหมวดหมู่ใหม่ได้ทางแบบฟอร์มด้านซ้ายมือ
             </p>
           )}
         </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

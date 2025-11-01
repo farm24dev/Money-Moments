@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AppShell } from "@/components/layout/AppShell";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { buttonClassName } from "@/lib/button-classes";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -22,8 +32,8 @@ async function getHistoryData(userId: string) {
       orderBy: { name: "asc" },
       include: {
         savingEntries: {
-          select: { amount: true, createdAt: true },
-          orderBy: { createdAt: "desc" },
+          select: { amount: true, type: true, transactionDate: true },
+          orderBy: { transactionDate: "desc" },
         },
         _count: {
           select: { savingEntries: true },
@@ -45,14 +55,17 @@ async function getHistoryData(userId: string) {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        transactionDate: "desc",
       },
     }),
   ]);
 
   const personSummaries = people.map((person) => {
     const totalAmount = person.savingEntries.reduce(
-      (sum, entry) => sum + Number(entry.amount),
+      (sum, entry) => {
+        const amount = Number(entry.amount);
+        return entry.type === "withdraw" ? sum - amount : sum + amount;
+      },
       0,
     );
 
@@ -61,7 +74,7 @@ async function getHistoryData(userId: string) {
       name: person.name,
       totalAmount,
       entryCount: person._count.savingEntries,
-      lastEntryAt: person.savingEntries[0]?.createdAt ?? null,
+      lastEntryAt: person.savingEntries[0]?.transactionDate ?? null,
     };
   });
 
@@ -72,10 +85,14 @@ async function getHistoryData(userId: string) {
     categoryName: entry.category?.name ?? null,
     label: entry.label,
     amount: Number(entry.amount),
+    type: entry.type,
+    transactionDate: entry.transactionDate,
     createdAt: entry.createdAt,
   }));
 
-  const totalSaved = entryList.reduce((sum, entry) => sum + entry.amount, 0);
+  const totalSaved = entryList.reduce((sum, entry) => {
+    return entry.type === "withdraw" ? sum - entry.amount : sum + entry.amount;
+  }, 0);
 
   return {
     personSummaries,
@@ -94,98 +111,130 @@ export default async function HistoryPage() {
   const data = await getHistoryData(session.user.id);
 
   return (
-    <div className="min-h-screen bg-zinc-100 py-12">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-zinc-900">ประวัติการออมทั้งหมด</h1>
-            <p className="text-sm text-zinc-600">
-              ตรวจสอบประวัติการบันทึกยอดออมของทุกคนและรายละเอียดการบันทึกแต่ละครั้ง
+    <AppShell>
+      <div className="space-y-10">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              ประวัติการออมทั้งหมด
+            </h1>
+            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+              ตรวจสอบประวัติการบันทึกยอดออมของทุกคน พร้อมเจาะลึกข้อมูลตามสมาชิกหรือหมวดหมู่
             </p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge className="bg-primary/15 text-primary">
+                ยอดรวม {currencyFormatter.format(data.totalSaved)}
+              </Badge>
+              <Badge className="bg-secondary text-secondary-foreground">
+                จำนวนการบันทึก {data.entries.length.toLocaleString("th-TH")}
+              </Badge>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
             <Link
               href="/"
-              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+              className={buttonClassName({ variant: "outline" })}
             >
               กลับหน้าหลัก
             </Link>
             <Link
               href="/categories"
-              className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 transition hover:bg-purple-100"
+              className={buttonClassName({ variant: "secondary" })}
             >
               จัดการหมวดหมู่
             </Link>
           </div>
-        </header>
+        </div>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-blue-600">ยอดออมรวมทั้งหมด</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {currencyFormatter.format(data.totalSaved)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-emerald-600">จำนวนสมาชิก</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {data.personSummaries.length} คน
-            </p>
-          </div>
-          <div className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-amber-600">จำนวนการบันทึก</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {data.entries.length.toLocaleString("th-TH")}
-            </p>
-          </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ยอดออมรวมทั้งหมด
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {currencyFormatter.format(data.totalSaved)}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                รวมทุกหมวดหมู่และทุกสมาชิกที่บันทึกไว้
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                จำนวนสมาชิกที่ติดตาม
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {data.personSummaries.length}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                สมาชิกที่มีการบันทึกอย่างน้อยหนึ่งครั้ง
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                จำนวนการบันทึกทั้งหมด
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {data.entries.length.toLocaleString("th-TH")}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                ทุกประวัติย้อนหลังตั้งแต่เริ่มใช้งานระบบ
+              </p>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-zinc-900">สรุปตามสมาชิก</h2>
-            <p className="text-sm text-zinc-600">กดชื่อสมาชิกเพื่อดูประวัติแบบละเอียด</p>
+            <h2 className="text-xl font-semibold text-foreground">สรุปตามสมาชิก</h2>
+            <p className="text-sm text-muted-foreground">กดที่ชื่อเพื่อดูรายละเอียดและจัดการข้อมูล</p>
           </div>
           {data.personSummaries.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {data.personSummaries.map((person) => (
-                <div
-                  key={person.id}
-                  className="flex h-full flex-col justify-between rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-zinc-900">
+                <Card key={person.id} className="border border-border/60 bg-card">
+                  <CardContent className="space-y-3 p-4">
+                    <div className="space-y-1">
                       <Link
                         href={`/history/${person.id}`}
-                        className="text-blue-600 underline-offset-2 hover:underline"
+                        className="text-lg font-semibold text-foreground underline-offset-4 hover:underline"
                       >
                         {person.name}
                       </Link>
-                    </h3>
-                    <p className="text-sm text-zinc-600">
-                      บันทึก {person.entryCount.toLocaleString("th-TH")} ครั้ง
-                    </p>
-                    <p className="text-sm font-medium text-zinc-900">
+                      <p className="text-xs text-muted-foreground">
+                        บันทึก {person.entryCount.toLocaleString("th-TH")} ครั้ง
+                      </p>
+                    </div>
+                    <p className="text-base font-medium text-foreground">
                       {currencyFormatter.format(person.totalAmount)}
                     </p>
-                    {person.lastEntryAt ? (
-                      <p className="text-xs text-zinc-500">
-                        ล่าสุด {dateTimeFormatter.format(new Date(person.lastEntryAt))}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-zinc-500">ยังไม่มีประวัติ</p>
-                    )}
-                  </div>
-                  <Link
-                    href={`/history/${person.id}`}
-                    className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
-                  >
-                    ดูรายละเอียด
-                  </Link>
-                </div>
+                    <p className="text-xs text-muted-foreground">
+                      {person.lastEntryAt
+                        ? `บันทึกล่าสุด ${dateTimeFormatter.format(new Date(person.lastEntryAt))}`
+                        : "ยังไม่มีประวัติ"}
+                    </p>
+                    <Link
+                      href={`/history/${person.id}`}
+                      className={buttonClassName({ variant: "outline", size: "sm", className: "w-full text-center" })}
+                    >
+                      ดูรายละเอียด
+                    </Link>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
+            <p className="rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
               ยังไม่มีข้อมูลสมาชิก เริ่มเพิ่มสมาชิกจากหน้าหลัก
             </p>
           )}
@@ -193,54 +242,74 @@ export default async function HistoryPage() {
 
         <section className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-zinc-900">ประวัติการบันทึกทั้งหมด</h2>
-            <p className="text-sm text-zinc-600">เรียงตามเวลาจากใหม่ไปเก่า</p>
+            <h2 className="text-xl font-semibold text-foreground">ประวัติการบันทึกทั้งหมด</h2>
+            <p className="text-sm text-muted-foreground">เรียงตามเวลาจากใหม่ไปเก่า</p>
           </div>
           {data.entries.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-                <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-                  <tr>
-                    <th className="px-4 py-3">สมาชิก</th>
-                    <th className="px-4 py-3">หมวดหมู่</th>
-                    <th className="px-4 py-3">รายการ</th>
-                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-                    <th className="px-4 py-3">บันทึกเมื่อ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {data.entries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-blue-50/40">
-                      <td className="px-4 py-3 font-medium text-zinc-800">
-                        <Link
-                          href={`/history/${entry.personId}`}
-                          className="text-blue-600 underline-offset-2 hover:underline"
-                        >
-                          {entry.personName}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600">
-                        {entry.categoryName ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600">{entry.label}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900">
-                        {currencyFormatter.format(entry.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500">
-                        {dateTimeFormatter.format(new Date(entry.createdAt))}
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-border/60 text-left text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">ประเภท</th>
+                      <th className="px-4 py-3">สมาชิก</th>
+                      <th className="px-4 py-3">หมวดหมู่</th>
+                      <th className="px-4 py-3">รายการ</th>
+                      <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+                      <th className="px-4 py-3">วันที่</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {data.entries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-muted/40">
+                        <td className="px-4 py-3">
+                          <Badge
+                            className={
+                              entry.type === "withdraw"
+                                ? "bg-destructive/15 text-destructive"
+                                : "bg-emerald-500/15 text-emerald-700"
+                            }
+                          >
+                            {entry.type === "withdraw" ? "เบิก" : "ฝาก"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          <Link
+                            href={`/history/${entry.personId}`}
+                            className="underline-offset-4 hover:underline"
+                          >
+                            {entry.personName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.categoryName ? (
+                            <Badge className="bg-accent text-accent-foreground">
+                              {entry.categoryName}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{entry.label}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${entry.type === "withdraw" ? "text-destructive" : "text-foreground"}`}>
+                          {entry.type === "withdraw" ? "-" : "+"}{currencyFormatter.format(entry.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {dateTimeFormatter.format(new Date(entry.transactionDate))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
+            <p className="rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
               ยังไม่มีประวัติการออม
             </p>
           )}
         </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

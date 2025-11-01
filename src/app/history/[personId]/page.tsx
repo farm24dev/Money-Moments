@@ -2,6 +2,16 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { DeletePersonButton } from "@/app/components/DeletePersonButton";
+import { AppShell } from "@/components/layout/AppShell";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { buttonClassName } from "@/lib/button-classes";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -27,11 +37,13 @@ async function getPersonHistory(userId: string, personId: number) {
       name: true,
       createdAt: true,
       savingEntries: {
-        orderBy: { createdAt: "desc" },
+        orderBy: { transactionDate: "desc" },
         select: {
           id: true,
           label: true,
           amount: true,
+          type: true,
+          transactionDate: true,
           createdAt: true,
           category: {
             select: { name: true },
@@ -46,7 +58,10 @@ async function getPersonHistory(userId: string, personId: number) {
   }
 
   const totalAmount = person.savingEntries.reduce(
-    (sum, entry) => sum + Number(entry.amount),
+    (sum, entry) => {
+      const amount = Number(entry.amount);
+      return entry.type === "withdraw" ? sum - amount : sum + amount;
+    },
     0,
   );
 
@@ -55,6 +70,8 @@ async function getPersonHistory(userId: string, personId: number) {
     label: entry.label,
     categoryName: entry.category?.name ?? null,
     amount: Number(entry.amount),
+    type: entry.type,
+    transactionDate: entry.transactionDate,
     createdAt: entry.createdAt,
   }));
 
@@ -81,7 +98,6 @@ export default async function PersonHistoryPage({
   }
 
   const { personId: personIdParam } = await params;
-
   const personId = Number(personIdParam);
 
   if (!Number.isInteger(personId)) {
@@ -95,97 +111,151 @@ export default async function PersonHistoryPage({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 py-12">
-      <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-zinc-900">
+    <AppShell>
+      <div className="space-y-10">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               ประวัติของ {data.person.name}
             </h1>
-            <p className="text-sm text-zinc-600">
+            <p className="text-sm text-muted-foreground sm:text-base">
               เริ่มบันทึกตั้งแต่ {dateTimeFormatter.format(new Date(data.person.createdAt))}
             </p>
+            <Badge className="bg-primary/15 text-primary">
+              ยอดสะสม {currencyFormatter.format(data.totalAmount)}
+            </Badge>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
             <Link
               href="/history"
-              className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+              className={buttonClassName({ variant: "outline" })}
             >
               ดูประวัติทั้งหมด
             </Link>
             <Link
               href="/"
-              className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
+              className={buttonClassName({ variant: "secondary" })}
             >
               กลับหน้าหลัก
             </Link>
           </div>
-        </header>
+        </div>
 
         <section className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-blue-600">ยอดออมทั้งหมด</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {currencyFormatter.format(data.totalAmount)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-emerald-600">จำนวนครั้งที่บันทึก</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {data.entries.length.toLocaleString("th-TH")} ครั้ง
-            </p>
-          </div>
-          <div className="rounded-xl border border-red-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-red-600">การจัดการ</p>
-            <DeletePersonButton
-              personId={data.person.id}
-              personName={data.person.name}
-              redirectTo="/history"
-            />
-          </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ยอดออมทั้งหมด
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {currencyFormatter.format(data.totalAmount)}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                รวมทุกการบันทึกของ {data.person.name}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                จำนวนครั้งที่บันทึก
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {data.entries.length.toLocaleString("th-TH")}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                บันทึกล่าสุด{' '}
+                {data.entries[0]
+                  ? dateTimeFormatter.format(new Date(data.entries[0].transactionDate))
+                  : "ยังไม่มีข้อมูล"}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-destructive/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-destructive">
+                การจัดการ
+              </CardTitle>
+              <CardDescription>
+                ลบสมาชิกนี้พร้อมข้อมูลทั้งหมด หากไม่ต้องการติดตามต่อ
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DeletePersonButton
+                personId={data.person.id}
+                personName={data.person.name}
+                redirectTo="/history"
+                className="w-full"
+              />
+            </CardContent>
+          </Card>
         </section>
 
         <section className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-zinc-900">รายการบันทึก</h2>
-            <p className="text-sm text-zinc-600">เรียงตามเวลาจากใหม่ไปเก่า</p>
+            <h2 className="text-xl font-semibold text-foreground">รายการบันทึก</h2>
+            <p className="text-sm text-muted-foreground">เรียงตามเวลาจากใหม่ไปเก่า</p>
           </div>
           {data.entries.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-                <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-                  <tr>
-                    <th className="px-4 py-3">หมวดหมู่</th>
-                    <th className="px-4 py-3">รายการ</th>
-                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-                    <th className="px-4 py-3">บันทึกเมื่อ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {data.entries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-blue-50/40">
-                      <td className="px-4 py-3 text-zinc-600">
-                        {entry.categoryName ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600">{entry.label}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900">
-                        {currencyFormatter.format(entry.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500">
-                        {dateTimeFormatter.format(new Date(entry.createdAt))}
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-border/60 text-left text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">ประเภท</th>
+                      <th className="px-4 py-3">หมวดหมู่</th>
+                      <th className="px-4 py-3">รายการ</th>
+                      <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+                      <th className="px-4 py-3">วันที่</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {data.entries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-muted/40">
+                        <td className="px-4 py-3">
+                          <Badge
+                            className={
+                              entry.type === "withdraw"
+                                ? "bg-destructive/15 text-destructive"
+                                : "bg-emerald-500/15 text-emerald-700"
+                            }
+                          >
+                            {entry.type === "withdraw" ? "เบิก" : "ฝาก"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.categoryName ? (
+                            <Badge className="bg-accent text-accent-foreground">
+                              {entry.categoryName}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{entry.label}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${entry.type === "withdraw" ? "text-destructive" : "text-foreground"}`}>
+                          {entry.type === "withdraw" ? "-" : "+"}{currencyFormatter.format(entry.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {dateTimeFormatter.format(new Date(entry.transactionDate))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
+            <p className="rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
               ยังไม่มีประวัติการออมสำหรับสมาชิกคนนี้
             </p>
           )}
         </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

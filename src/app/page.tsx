@@ -1,9 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AddPersonForm } from "@/app/components/AddPersonForm";
 import { AddSavingEntryForm } from "@/app/components/AddSavingEntryForm";
 import { DeletePersonButton } from "@/app/components/DeletePersonButton";
+import { AppShell } from "@/components/layout/AppShell";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { buttonClassName } from "@/lib/button-classes";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -34,12 +44,16 @@ type DashboardData = {
     categoryName: string | null;
     label: string;
     amount: number;
+    type: string;
+    transactionDate: string;
     createdAt: string;
   }>;
   categories: Array<{
     id: number;
     name: string;
     description: string | null;
+    totalAmount: number;
+    entryCount: number;
   }>;
   totalSaved: number;
 };
@@ -51,7 +65,7 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
       orderBy: { name: "asc" },
       include: {
         savingEntries: {
-          select: { amount: true },
+          select: { amount: true, type: true },
         },
         _count: {
           select: { savingEntries: true },
@@ -73,24 +87,30 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        transactionDate: "desc",
       },
       take: 25,
     }),
-    await prisma.savingCategory.findMany({
+    prisma.savingCategory.findMany({
       where: { userId },
       orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        description: true,
+      include: {
+        savingEntries: {
+          select: { amount: true, type: true },
+        },
+        _count: {
+          select: { savingEntries: true },
+        },
       },
     }),
   ]);
 
   const peopleWithTotals = people.map((person) => {
     const total = person.savingEntries.reduce(
-      (acc, entry) => acc + Number(entry.amount),
+      (acc, entry) => {
+        const amount = Number(entry.amount);
+        return entry.type === "withdraw" ? acc - amount : acc + amount;
+      },
       0,
     );
 
@@ -99,6 +119,24 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
       name: person.name,
       totalAmount: total,
       entryCount: person._count.savingEntries,
+    };
+  });
+
+  const categoriesWithTotals = categories.map((category) => {
+    const total = category.savingEntries.reduce(
+      (acc, entry) => {
+        const amount = Number(entry.amount);
+        return entry.type === "withdraw" ? acc - amount : acc + amount;
+      },
+      0,
+    );
+
+    return {
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      totalAmount: total,
+      entryCount: category._count.savingEntries,
     };
   });
 
@@ -114,13 +152,15 @@ async function getDashboardData(userId: string): Promise<DashboardData> {
     categoryName: entry.category?.name ?? null,
     label: entry.label,
     amount: Number(entry.amount),
+    type: entry.type,
+    transactionDate: entry.transactionDate.toISOString(),
     createdAt: entry.createdAt.toISOString(),
   }));
 
   return {
     people: peopleWithTotals,
     entries: recentEntries,
-    categories,
+    categories: categoriesWithTotals,
     totalSaved,
   };
 }
@@ -146,83 +186,121 @@ export default async function Home() {
     .sort((a, b) => b.totalAmount - a.totalAmount)[0];
 
   const lastEntry = data.entries[0];
+  const topCategories = data.categories
+    .slice()
+    .sort((a, b) => b.totalAmount - a.totalAmount)
+    .slice(0, 4);
 
   return (
-    <div className="min-h-screen bg-zinc-100 py-12 font-sans text-zinc-900">
-      <div className="mx-auto flex max-w-6xl flex-col gap-10 px-4">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <AppShell>
+      <div className="space-y-10">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold sm:text-4xl">
-              ระบบบันทึกการออมเงิน
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              แดชบอร์ดการออม
             </h1>
-            <p className="max-w-2xl text-sm text-zinc-600 sm:text-base">
-              บันทึกยอดออมเงินของแต่ละคน ตรวจสอบยอดรวม และดูประวัติการฝากล่าสุดได้จากหน้าเดียว
+            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+              ตรวจสอบยอดรวม สถานะการออมของทุกคน และจัดการหมวดหมู่ได้จากแผงควบคุมเดียว
             </p>
-            <nav className="flex flex-wrap gap-2 pt-2 text-xs sm:text-sm">
-              <Link
-                href="/history"
-                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-medium text-blue-700 transition hover:bg-blue-100"
-              >
-                ดูประวัติทั้งหมด
-              </Link>
-              <Link
-                href="/categories"
-                className="rounded-full border border-purple-200 bg-purple-50 px-3 py-1 font-medium text-purple-700 transition hover:bg-purple-100"
-              >
-                จัดการหมวดหมู่
-              </Link>
-            </nav>
-          </div>
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <div className="text-sm text-zinc-600">
-              <p className="font-semibold text-zinc-800">
-                {session.user.name ?? session.user.email}
-              </p>
-              {session.user.name ? (
-                <p className="text-xs text-zinc-500">{session.user.email}</p>
-              ) : null}
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge className="bg-primary/15 text-primary">อัปเดตล่าสุด {lastEntry ? dateTimeFormatter.format(new Date(lastEntry.createdAt)) : "ยังไม่มีข้อมูล"}</Badge>
+              <Badge className="bg-secondary text-secondary-foreground">
+                หมวดหมู่ทั้งหมด {data.categories.length} รายการ
+              </Badge>
             </div>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="rounded-md border border-transparent bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
-              >
-                ออกจากระบบ
-              </button>
-            </form>
           </div>
-        </header>
+          <form action={signOutAction} className="flex justify-end">
+            <Button variant="outline">ออกจากระบบ</Button>
+          </form>
+        </div>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-blue-600">ยอดออมทั้งหมด</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {currencyFormatter.format(data.totalSaved)}
-            </p>
-          </div>
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-emerald-600">จำนวนสมาชิก</p>
-            <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {data.people.length} คน
-            </p>
-          </div>
-          <div className="rounded-xl border border-purple-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-purple-600">สถิติเด่น</p>
-            <p className="mt-2 text-sm text-zinc-700">
-              {topSaver
-                ? `${topSaver.name} สะสม ${currencyFormatter.format(topSaver.totalAmount)}`
-                : "ยังไม่มีข้อมูล"}
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              {lastEntry
-                ? `บันทึกล่าสุดเมื่อ ${dateTimeFormatter.format(new Date(lastEntry.createdAt))}`
-                : "ยังไม่มีการฝากเงิน"}
-            </p>
-          </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                ยอดออมรวมทั้งหมด
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {currencyFormatter.format(data.totalSaved)}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                รวมทุกสมาชิกในระบบ
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                จำนวนสมาชิก
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {data.people.length}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                สมาชิกที่กำลังติดตามการออม
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                หมวดหมู่ที่ใช้งาน
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-semibold tracking-tight">
+                {data.categories.filter((category) => category.entryCount > 0).length}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                มีประวัติการบันทึกแล้วอย่างน้อยหนึ่งครั้ง
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                สถิติเด่น
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              <p className="font-semibold text-foreground">
+                {topSaver
+                  ? `${topSaver.name} สะสม ${currencyFormatter.format(topSaver.totalAmount)}`
+                  : "ยังไม่มีข้อมูล"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {lastEntry
+                  ? `บันทึกล่าสุดเมื่อ ${dateTimeFormatter.format(new Date(lastEntry.createdAt))}`
+                  : "ยังไม่มีการฝากเงิน"}
+              </p>
+            </CardContent>
+          </Card>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <AddPersonForm />
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>เพิ่มสมาชิกใหม่</CardTitle>
+              <CardDescription>
+                กรอกชื่อสมาชิกที่ต้องการติดตามยอดออม ระบบจะเริ่มนับยอดตั้งแต่ครั้งแรกที่บันทึก
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                คลิกปุ่มด้านล่างเพื่อไปยังหน้าเพิ่มสมาชิกใหม่
+              </p>
+              <Link
+                href="/people/add"
+                className={buttonClassName({ variant: "default", className: "w-full text-center" })}
+              >
+                เพิ่มสมาชิกใหม่
+              </Link>
+            </CardContent>
+          </Card>
           <AddSavingEntryForm
             people={data.people.map((person) => ({
               id: person.id,
@@ -236,121 +314,214 @@ export default async function Home() {
           />
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">สมาชิกทั้งหมด</h2>
-            <p className="text-sm text-zinc-600">
-              กดชื่อเพื่อดูประวัติ หรือจัดการสมาชิกได้จากปุ่มลบ
-            </p>
-          </div>
-          {data.people.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {data.people.map((person) => (
-                <div
-                  key={person.id}
-                  className="flex h-full flex-col justify-between rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-zinc-900">
-                      <Link
-                        href={`/history/${person.id}`}
-                        className="text-blue-600 underline-offset-2 hover:underline"
-                      >
-                        {person.name}
-                      </Link>
-                    </h3>
-                    <p className="text-sm text-zinc-600">
-                      บันทึก {person.entryCount.toLocaleString("th-TH")} ครั้ง
-                    </p>
-                    <p className="text-sm font-medium text-zinc-900">
-                      {currencyFormatter.format(person.totalAmount)}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex flex-col gap-2">
-                    <Link
-                      href={`/history/${person.id}`}
-                      className="inline-flex items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
-                    >
-                      ดูประวัติ
-                    </Link>
-                    <DeletePersonButton
-                      personId={person.id}
-                      personName={person.name}
-                      redirectTo=""
-                    />
-                  </div>
+        <section className="grid gap-4 xl:grid-cols-3">
+          <Card className="xl:col-span-2">
+            <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>สมาชิกทั้งหมด</CardTitle>
+                <CardDescription>
+                  ดูยอดรวมและจำนวนครั้งที่บันทึกของแต่ละคน กดเพื่อดูรายละเอียดเชิงลึก
+                </CardDescription>
+              </div>
+              <Link
+                href="/history"
+                className={buttonClassName({ variant: "outline", size: "sm" })}
+              >
+                ดูประวัติรวม
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {data.people.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {data.people.map((person) => (
+                    <Card key={person.id} className="border border-border/60">
+                      <CardContent className="space-y-3 p-4">
+                        <div>
+                          <Link
+                            href={`/history/${person.id}`}
+                            className="text-lg font-semibold text-foreground underline-offset-4 hover:underline"
+                          >
+                            {person.name}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            บันทึก {person.entryCount.toLocaleString("th-TH")} ครั้ง
+                          </p>
+                        </div>
+                        <p className="text-base font-medium">
+                          {currencyFormatter.format(person.totalAmount)}
+                        </p>
+                        <div className="flex gap-2">
+                          <Link
+                            href={`/history/${person.id}`}
+                            className={buttonClassName({
+                              variant: "secondary",
+                              size: "sm",
+                              className: "flex-1 text-center",
+                            })}
+                          >
+                            ดูประวัติ
+                          </Link>
+                          <DeletePersonButton
+                            personId={person.id}
+                            personName={person.name}
+                            redirectTo=""
+                            className="flex-1"
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
-              ยังไม่มีสมาชิก เริ่มเพิ่มสมาชิกได้ด้านบน
-            </p>
-          )}
+              ) : (
+                <div className="space-y-4 rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    ยังไม่มีสมาชิก เริ่มเพิ่มสมาชิกใหม่เพื่อเริ่มบันทึกยอดออม
+                  </p>
+                  <Link
+                    href="/people/add"
+                    className={buttonClassName({ variant: "default", size: "sm" })}
+                  >
+                    เพิ่มสมาชิกแรก
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>หมวดหมู่ยอดนิยม</CardTitle>
+              <CardDescription>
+                สรุปยอดออมตามหมวดหมู่ เพื่อเห็นภาพรวมว่าเงินส่วนใหญ่ไปอยู่ที่ใด
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {topCategories.length > 0 ? (
+                <ul className="space-y-3 text-sm">
+                  {topCategories.map((category) => (
+                    <li
+                      key={category.id}
+                      className="flex items-center justify-between rounded-md border border-border/60 bg-muted/30 px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{category.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          บันทึก {category.entryCount.toLocaleString("th-TH")} ครั้ง
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-primary">
+                        {currencyFormatter.format(category.totalAmount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  ยังไม่มีหมวดหมู่ที่ใช้งาน เริ่มเพิ่มหมวดหมู่ใหม่เพื่อจัดระเบียบการออม
+                </p>
+              )}
+              <Link
+                href="/categories"
+                className={buttonClassName({ variant: "outline", size: "sm", className: "w-full text-center" })}
+              >
+                จัดการหมวดหมู่
+              </Link>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">รายการฝากล่าสุด</h2>
-            <p className="text-sm text-zinc-600">
-              แสดงข้อมูล 25 รายการล่าสุดตามเวลาที่บันทึก
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">รายการบันทึกล่าสุด</h2>
+              <p className="text-sm text-muted-foreground">
+                แสดงข้อมูล 25 รายการล่าสุด เรียงตามเวลาล่าสุดไปเก่าสุด
+              </p>
+            </div>
+            <Link
+              href="/history"
+              className={buttonClassName({ variant: "secondary", size: "sm" })}
+            >
+              เปิดหน้าประวัติทั้งหมด
+            </Link>
           </div>
           {data.entries.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-zinc-200 text-left text-sm">
-                <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-                  <tr>
-                    <th scope="col" className="px-4 py-3">
-                      สมาชิก
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      หมวดหมู่
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      รายการ
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right">
-                      จำนวนเงิน
-                    </th>
-                    <th scope="col" className="px-4 py-3">
-                      บันทึกเมื่อ
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {data.entries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-blue-50/40">
-                      <td className="px-4 py-3 font-medium text-zinc-800">
-                        <Link
-                          href={`/history/${entry.personId}`}
-                          className="text-blue-600 underline-offset-2 hover:underline"
-                        >
-                          {entry.personName}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600">
-                        {entry.categoryName ?? "-"}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600">{entry.label}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900">
-                        {currencyFormatter.format(entry.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-500">
-                        {dateTimeFormatter.format(new Date(entry.createdAt))}
-                      </td>
+            <div className="overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-border/60 text-left text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        ประเภท
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        สมาชิก
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        หมวดหมู่
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        รายการ
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        จำนวนเงิน
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        วันที่
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {data.entries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-muted/40">
+                        <td className="px-4 py-3">
+                          <Badge
+                            className={
+                              entry.type === "withdraw"
+                                ? "bg-destructive/15 text-destructive"
+                                : "bg-emerald-500/15 text-emerald-700"
+                            }
+                          >
+                            {entry.type === "withdraw" ? "เบิก" : "ฝาก"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-foreground">
+                          <Link
+                            href={`/history/${entry.personId}`}
+                            className="underline-offset-4 hover:underline"
+                          >
+                            {entry.personName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.categoryName ? (
+                            <Badge className="bg-accent text-accent-foreground">
+                              {entry.categoryName}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{entry.label}</td>
+                        <td className={`px-4 py-3 text-right font-semibold ${entry.type === "withdraw" ? "text-destructive" : "text-foreground"}`}>
+                          {entry.type === "withdraw" ? "-" : "+"}{currencyFormatter.format(entry.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {dateTimeFormatter.format(new Date(entry.transactionDate))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-6 text-center text-sm text-zinc-500">
+            <p className="rounded-md border border-dashed border-border/60 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
               ยังไม่มีการบันทึกยอดออม เริ่มจากการเพิ่มสมาชิกและบันทึกยอดแรกได้เลย
             </p>
           )}
         </section>
       </div>
-    </div>
+    </AppShell>
   );
 }

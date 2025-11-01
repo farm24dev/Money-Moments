@@ -2,29 +2,35 @@
 
 import { useFormStatus } from "react-dom";
 
+import { Button } from "@/components/ui/button";
+
 type SubmitButtonProps = {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
   isPending?: boolean;
+  variant?: React.ComponentProps<typeof Button>["variant"];
 };
 
 export function SubmitButton({
   children,
   pendingLabel = "กำลังบันทึก...",
-  className = "",
+  className,
   isPending,
+  variant = "default",
 }: SubmitButtonProps) {
   const { pending: formPending } = useFormStatus();
   const pending = isPending ?? formPending;
 
   return (
-    <button
+    <Button
       type="submit"
-      className={`rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={className}
+      isLoading={pending}
+      variant={variant}
       disabled={pending}
     >
       {pending ? pendingLabel : children}
-    </button>
+    </Button>
   );
 }

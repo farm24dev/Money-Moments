@@ -40,10 +40,26 @@ export async function POST(request: Request) {
     raw.categoryId === null || raw.categoryId === undefined
       ? null
       : Number(raw.categoryId);
+  const type = typeof raw.type === "string" ? raw.type : "deposit";
+  const transactionDate = typeof raw.transactionDate === "string" ? raw.transactionDate : null;
 
   if (!Number.isInteger(personId)) {
     return NextResponse.json(
       { success: false, message: "กรุณาเลือกสมาชิก" },
+      { status: 400 },
+    );
+  }
+
+  if (!transactionDate) {
+    return NextResponse.json(
+      { success: false, message: "กรุณาเลือกวันที่ทำรายการ" },
+      { status: 400 },
+    );
+  }
+
+  if (type !== "deposit" && type !== "withdraw") {
+    return NextResponse.json(
+      { success: false, message: "ประเภทรายการไม่ถูกต้อง" },
       { status: 400 },
     );
   }
@@ -117,6 +133,8 @@ export async function POST(request: Request) {
       data: {
         amount: amountValue.toString(),
         label,
+        type,
+        transactionDate: new Date(transactionDate),
         person: {
           connect: { id: person.id },
         },

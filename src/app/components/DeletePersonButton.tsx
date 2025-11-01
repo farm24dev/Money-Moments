@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { Button } from "@/components/ui/button";
+
 type DeletePersonButtonProps = {
   personId: number;
   personName: string;
@@ -13,13 +15,14 @@ type DeletePersonButtonProps = {
 type ApiResponse = {
   success: boolean;
   message?: string;
+  requiresConfirmation?: boolean;
 };
 
 export function DeletePersonButton({
   personId,
   personName,
   redirectTo = "/",
-  className = "",
+  className,
 }: DeletePersonButtonProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +33,7 @@ export function DeletePersonButton({
   const handleDelete = () => {
     const confirmationMessage = pendingForceDelete
       ? warning ??
-        `สมาชิกคนนี้มีประวัติการออมอยู่ ลบแล้วข้อมูลทั้งหมดจะถูกลบ ต้องการลบ ${personName} หรือไม่?`
+        `สมาชิกคนนี้มีประวัติการออมอยู่ ลบแล้วข้อมูลทั้งหมดจะหาย ต้องการลบ ${personName} หรือไม่?`
       : `ต้องการลบ ${personName} หรือไม่? ข้อมูลการออมทั้งหมดของสมาชิกคนนี้จะถูกลบด้วย`;
 
     const confirmed = window.confirm(confirmationMessage);
@@ -45,13 +48,9 @@ export function DeletePersonButton({
         const url = pendingForceDelete
           ? `/api/people/${personId}?force=true`
           : `/api/people/${personId}`;
-        const response = await fetch(url, {
-          method: "DELETE",
-        });
+        const response = await fetch(url, { method: "DELETE" });
 
-        const payload = (await response.json().catch(() => null)) as
-          | (ApiResponse & { requiresConfirmation?: boolean })
-          | null;
+        const payload = (await response.json().catch(() => null)) as ApiResponse | null;
 
         if (!response.ok || !payload?.success) {
           if (payload?.requiresConfirmation) {
@@ -84,16 +83,17 @@ export function DeletePersonButton({
 
   return (
     <div className="space-y-2">
-      <button
+      <Button
         type="button"
+        variant="destructive"
+        className={className}
         onClick={handleDelete}
-        disabled={isPending}
-        className={`w-full rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+        isLoading={isPending}
       >
-        {isPending ? "กำลังลบ..." : "ลบสมาชิก"}
-      </button>
+        ลบสมาชิก
+      </Button>
       {warning ? <p className="text-xs text-amber-600">{warning}</p> : null}
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }

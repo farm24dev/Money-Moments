@@ -3,9 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SubmitButton } from "@/app/components/SubmitButton";
 import { initialFormState, FormState } from "@/types/form-state";
-
-import { SubmitButton } from "./SubmitButton";
 
 type ApiResponse<T = unknown> = {
   success: boolean;
@@ -37,18 +39,12 @@ export function AddPersonForm() {
     const name = formData.get("name")?.toString().trim() ?? "";
 
     if (!name) {
-      setState({
-        status: "error",
-        message: "กรุณาระบุชื่อสมาชิก",
-      });
+      setState({ status: "error", message: "กรุณาระบุชื่อสมาชิก" });
       return;
     }
 
     if (name.length > 64) {
-      setState({
-        status: "error",
-        message: "ชื่อต้องไม่เกิน 64 ตัวอักษร",
-      });
+      setState({ status: "error", message: "ชื่อต้องไม่เกิน 64 ตัวอักษร" });
       return;
     }
 
@@ -78,11 +74,13 @@ export function AddPersonForm() {
 
         setState({
           status: "success",
-          message:
-            payload.message ?? `เพิ่ม ${payload.data?.name ?? "สมาชิก"} เรียบร้อย`,
+          message: payload.message ?? `เพิ่ม ${payload.data?.name ?? "สมาชิก"} เรียบร้อย`,
         });
 
-        router.refresh();
+        // Redirect to home page after 1 second
+        setTimeout(() => {
+          router.push("/");
+        }, 1000);
       } catch (error) {
         console.error("Failed to submit add person form", error);
         setState({
@@ -98,40 +96,41 @@ export function AddPersonForm() {
   };
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
-    >
-      <div>
-        <h2 className="text-base font-semibold text-zinc-900">เพิ่มสมาชิก</h2>
-        <p className="text-sm text-zinc-500">
-          ระบุชื่อของคนที่ต้องการบันทึกเงินออม
-        </p>
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="person-name" className="text-sm font-medium text-zinc-700">
-          ชื่อสมาชิก
-        </label>
-        <input
-          id="person-name"
-          name="name"
-          type="text"
-          required
-          maxLength={64}
-          placeholder="เช่น แพรวา"
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-        />
-      </div>
-      {state.status === "error" ? (
-        <p className="text-sm text-red-600">{state.message}</p>
-      ) : null}
-      {state.status === "success" && state.message ? (
-        <p className="text-sm text-emerald-600">{state.message}</p>
-      ) : null}
-      <SubmitButton pendingLabel="กำลังเพิ่ม..." isPending={isPending}>
-        บันทึก
-      </SubmitButton>
-    </form>
+    <Card>
+      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <CardHeader className="pb-2">
+          <CardTitle>เพิ่มสมาชิกใหม่</CardTitle>
+          <CardDescription>
+            กรอกชื่อสมาชิกที่ต้องการติดตามยอดออม ระบบจะเริ่มนับยอดตั้งแต่ครั้งแรกที่บันทึก
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="person-name" requiredIndicator>
+              ชื่อสมาชิก
+            </Label>
+            <Input
+              id="person-name"
+              name="name"
+              placeholder="เช่น แพรวา"
+              autoComplete="off"
+              maxLength={64}
+              required
+            />
+          </div>
+          {state.status === "error" ? (
+            <p className="text-sm text-destructive">{state.message}</p>
+          ) : null}
+          {state.status === "success" && state.message ? (
+            <p className="text-sm text-emerald-600">{state.message}</p>
+          ) : null}
+        </CardContent>
+        <div className="px-6 pb-6">
+          <SubmitButton pendingLabel="กำลังเพิ่ม..." isPending={isPending} className="w-full">
+            บันทึกสมาชิก
+          </SubmitButton>
+        </div>
+      </form>
+    </Card>
   );
 }

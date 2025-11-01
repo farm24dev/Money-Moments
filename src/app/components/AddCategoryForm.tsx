@@ -3,9 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { SubmitButton } from "@/app/components/SubmitButton";
 import { initialFormState, FormState } from "@/types/form-state";
-
-import { SubmitButton } from "./SubmitButton";
 
 type ApiResponse<T = unknown> = {
   success: boolean;
@@ -82,8 +85,7 @@ export function AddCategoryForm() {
 
         setState({
           status: "success",
-          message:
-            payload.message ?? `เพิ่มหมวดหมู่ ${payload.data?.name ?? "ใหม่"} เรียบร้อย`,
+          message: payload.message ?? `เพิ่มหมวดหมู่ ${payload.data?.name ?? "ใหม่"} เรียบร้อย`,
         });
         router.refresh();
       } catch (error) {
@@ -101,53 +103,50 @@ export function AddCategoryForm() {
   };
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={handleSubmit}
-      className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
-    >
-      <div>
-        <h2 className="text-base font-semibold text-zinc-900">เพิ่มหมวดหมู่การออม</h2>
-        <p className="text-sm text-zinc-500">
-          กำหนดหมวดหมู่เพื่อเลือกใช้ตอนบันทึกยอดออม
-        </p>
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="category-name" className="text-sm font-medium text-zinc-700">
-          ชื่อหมวดหมู่
-        </label>
-        <input
-          id="category-name"
-          name="name"
-          type="text"
-          required
-          maxLength={64}
-          placeholder="เช่น กองทุนการศึกษา"
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="category-description" className="text-sm font-medium text-zinc-700">
-          คำอธิบาย (ไม่บังคับ)
-        </label>
-        <textarea
-          id="category-description"
-          name="description"
-          maxLength={256}
-          rows={3}
-          placeholder="รายละเอียดเพิ่มเติมหรือเป้าหมายของหมวดหมู่นี้"
-          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-        />
-      </div>
-      {state.status === "error" ? (
-        <p className="text-sm text-red-600">{state.message}</p>
-      ) : null}
-      {state.status === "success" && state.message ? (
-        <p className="text-sm text-emerald-600">{state.message}</p>
-      ) : null}
-      <SubmitButton pendingLabel="กำลังเพิ่ม..." isPending={isPending}>
-        บันทึกหมวดหมู่
-      </SubmitButton>
-    </form>
+    <Card>
+      <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <CardHeader className="pb-2">
+          <CardTitle>เพิ่มหมวดหมู่การออม</CardTitle>
+          <CardDescription>
+            แบ่งหมวดหมู่เพื่อวิเคราะห์รูปแบบการออม และเลือกใช้สะดวกในแบบฟอร์มบันทึกยอด
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="category-name" requiredIndicator>
+              ชื่อหมวดหมู่
+            </Label>
+            <Input
+              id="category-name"
+              name="name"
+              placeholder="เช่น กองทุนการศึกษา"
+              maxLength={64}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category-description">คำอธิบาย (ไม่บังคับ)</Label>
+            <Textarea
+              id="category-description"
+              name="description"
+              maxLength={256}
+              rows={3}
+              placeholder="รายละเอียดเพิ่มเติมหรือเป้าหมายของหมวดหมู่นี้"
+            />
+          </div>
+          {state.status === "error" ? (
+            <p className="text-sm text-destructive">{state.message}</p>
+          ) : null}
+          {state.status === "success" && state.message ? (
+            <p className="text-sm text-emerald-600">{state.message}</p>
+          ) : null}
+        </CardContent>
+        <div className="px-6 pb-6">
+          <SubmitButton pendingLabel="กำลังเพิ่ม..." isPending={isPending} className="w-full">
+            บันทึกหมวดหมู่
+          </SubmitButton>
+        </div>
+      </form>
+    </Card>
   );
 }

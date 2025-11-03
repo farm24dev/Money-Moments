@@ -163,7 +163,7 @@ export async function POST(request: Request) {
 
       // Send notification asynchronously without blocking the response
       const notifyFunction = type === "deposit" ? notifyDeposit : notifyWithdraw;
-      
+
       notifyFunction({
         personName: person.name,
         amount: amountValue,

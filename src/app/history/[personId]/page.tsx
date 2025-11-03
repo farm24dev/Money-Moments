@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { DeletePersonButton } from "@/app/components/DeletePersonButton";
+import { SendSummaryButton } from "@/app/components/SendSummaryButton";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -181,10 +182,15 @@ export default async function PersonHistoryPage({
                 การจัดการ
               </CardTitle>
               <CardDescription>
-                ลบสมาชิกนี้พร้อมข้อมูลทั้งหมด หากไม่ต้องการติดตามต่อ
+                ส่งสรุปไปยัง LINE หรือลบสมาชิกนี้พร้อมข้อมูลทั้งหมด
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <SendSummaryButton
+                personId={data.person.id}
+                personName={data.person.name}
+                className="w-full"
+              />
               <DeletePersonButton
                 personId={data.person.id}
                 personName={data.person.name}

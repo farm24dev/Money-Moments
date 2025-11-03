@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyDeposit, notifyWithdraw } from "@/lib/line-notify";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
       id: personId,
       userId: session.user.id,
     },
-    select: { id: true },
+    select: { id: true, name: true },
   });
 
   if (!person) {
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
   }
 
   let categoryConnect: { connect: { id: number } } | undefined;
+  let categoryName: string | null = null;
 
   if (categoryId !== null) {
     if (!Number.isInteger(categoryId)) {
@@ -115,7 +117,7 @@ export async function POST(request: Request) {
         id: categoryId,
         userId: session.user.id,
       },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     if (!category) {
@@ -126,6 +128,7 @@ export async function POST(request: Request) {
     }
 
     categoryConnect = { connect: { id: category.id } };
+    categoryName = category.name;
   }
 
   try {
@@ -144,6 +147,34 @@ export async function POST(request: Request) {
         id: true,
       },
     });
+
+    // Send LINE notification for both deposits and withdrawals
+    if (type === "deposit" || type === "withdraw") {
+      // Calculate balance for this person
+      const allEntries = await prisma.savingEntry.findMany({
+        where: { personId: person.id },
+        select: { amount: true, type: true },
+      });
+
+      const balance = allEntries.reduce((sum, e) => {
+        const amt = Number(e.amount);
+        return e.type === "withdraw" ? sum - amt : sum + amt;
+      }, 0);
+
+      // Send notification asynchronously without blocking the response
+      const notifyFunction = type === "deposit" ? notifyDeposit : notifyWithdraw;
+      
+      notifyFunction({
+        personName: person.name,
+        amount: amountValue,
+        label,
+        categoryName,
+        transactionDate: new Date(transactionDate),
+        balance,
+      }).catch((error) => {
+        console.error("Failed to send LINE notification:", error);
+      });
+    }
 
     return NextResponse.json({ success: true, data: entry }, { status: 201 });
   } catch (error) {

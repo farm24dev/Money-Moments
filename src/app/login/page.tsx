@@ -54,12 +54,12 @@ export default async function LoginPage() {
           </p>
         </div>
         <LoginForm action={loginAction} />
-        <p className="text-center text-xs text-zinc-500">
+        {/* <p className="text-center text-xs text-zinc-500">
           กลับหน้าหลัก{" "}
           <Link href="/" className="font-medium text-blue-600 hover:underline">
             ระบบบันทึกการออมเงิน
           </Link>
-        </p>
+        </p> */}
       </div>
     </div>
   );
